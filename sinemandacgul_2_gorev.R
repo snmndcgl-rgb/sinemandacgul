@@ -1,95 +1,93 @@
-# R'de Temel Fonksiyonlar
-getwd()
+# Veri Madenciliginde Kullanilan Temel Fonksiyonlar
 
-# R'de basit bir matematiksel kod temel fonksiyonlar ile yapilabilir.
-kup_alma <- function(x) {
-  return(x^3)
-}
-print(kup_alma(8)) 
+# Veri madenciliginde 'tidyverse' genel bir kutuphane olarak 
+# (dplyr, ggplot2, tidyr) olmazsa olmazdir.
 
-topla <- function(x,y) {
-  return(x+y)
-}
-print(topla(1500,1200))
-
-isim <- "Veri Madenciligi"
-toupper(isim)   # Buyuk harfe cevirir
-substr(isim, 1, 4) # Ilk 4 karakteri alir
-
-# gerekli paketleri yukleme
-# install.packages("tidyverse") # verinin aktarildigi, duzenlendigi, donusturuldugu bir pakettir.
-# install.packages("zoo")       # eksik verileri doldurabilecegimiz bir pakettir.
+# 1. Gerekli paketleri yuklemek gerekiyor.
+install.packages("tidyverse")
+install.packages("skimr")
 library(tidyverse)
+library(skimr)   
 
-data(mtcars) # R yazilimindan bir veri seti kullanmak istedim. 
-veri_sinem <- mtcars # veri dosyasini adima tanimladim.
-head(veri_sinem)     # Ilk 6 satiri gormek istedim
-dim(veri_sinem)      # Kac satir, kac sutun var ogrenmek istedim
-summary(veri_sinem)  # Istatistiksel ozeti istedigim fonksiyon
+# 2. Veri Setini hazirlamak gerekiyor.
+# Ornek olarak R icinde hazir bulunan 'iris'i kullandim, df ile cagirdim.
+df <- as_tibble(iris)
 
-# Veride bosluk olusturma
-veri_sinem$mpg[c(2, 5)] <- NA
+# 3. Veriyi kesfetmem gerekiyor.
+glimpse(df)       # Veri tipleri ve ilk degerler
+summary(df)       # Temel istatistiksel ozet (Min, Max, Mean...)
+skim(df)          # Daha detayli ve gorsel bir ozet (Eksik veri ve dagilim dahil)
 
-# Eksik verileri ortalama ile doldur (na.rm = TRUE)
-ortalama_mpg <- mean(veri_sinem$mpg, na.rm = TRUE)
-veri_sinem$mpg[is.na(veri_sinem$mpg)] <- ortalama_mpg
+# 3.1. Eksik Veri Kontrolu
+# Veri madenciliginde eksik veri analizi bozabilir.
+anyNA(df)                       # Hic eksik veri var mi? (TRUE/FALSE)
+colSums(is.na(df))              # Sutun sutun eksik veri sayisi
 
-# veri turunu degistirme: nicel (cyl) verisini kategorik yaparak gruplandirma yaptim
-veri_sinem$cyl <- as.factor(veri_sinem$cyl)
+# 3.2. Dagilim ve Aykiri Deger (Outlier) Analizi
+# Sayisal bir degiskenin dagilimini gormek icin:
+ggplot(df, aes(x = Sepal.Length)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  theme_minimal() +
+  labs(title = "Sepal Length Dagilimi")
 
-# scale() fonksiyonu ile z puani hesapladim
-veri_sinem$hp_scaled <- scale(veri_sinem$hp)
+# Aykiri degerleri gormek icin Boxplot:
+ggplot(df, aes(y = Sepal.Length, x = Species)) +
+  geom_boxplot()
 
-# Urettigim z puanlari yeni sekmede gormek istedim.
-View(veri_sinem)
 
-# Yakit tuketimi (mpg) 15'ten kucuk olanlari secip filtrelemek istedim
-ekonomik_arabalar <- subset(veri_sinem, mpg < 15)
+# 4. VERI ON ISLEME
+# Amacimiz: Veriyi analiz edilebilir ve temiz bir hale getirmek.
 
-# Bazi ozelliklerine gore sutun sectim
-net_listem <- ekonomik_arabalar[, c("mpg", "cyl", "hp", "hp_scaled")]
+# 4.1. Sutun Adlarini Duzenleme 
+# Tum sutun isimlerini kucuk harfe cevirmek standart bir yaklasimdir.
+df_clean <- df %>% 
+  rename_all(tolower)
 
-# Sectigim sutunlarla yeni bir liste olusturdum, bu arada hp degerini 100'e bolerek kucultmek istedim.
-net_listem$hp_oran <- net_listem$hp / 100
+# 4.2. Filtreleme ve Secme
+df_subset <- df_clean %>%
+  filter(species != "setosa") %>%
+  select(sepal.length, sepal.width, species)
 
-# Sonucu yazdirarak gormek istedim
-print(net_listem)
+# 4.3. Yeni Degisken Turetme 
+df_preprocessed <- df_subset %>%
+  mutate(sepal_area = sepal.length * sepal.width, # Alan hesaplama
+         size_cat = if_else(sepal.length > 5.5, "Large", "Small")) # Kategorize etme
 
-# Mevcut sutun isimlerini kontrol etmek istedim
-colnames(net_listem)
+# 4.4. Normalizasyon / Standartlastirma 
+df_scaled <- df_preprocessed %>%
+  mutate(across(where(is.numeric), scale)) # Sayisal sutunlari standartlastirir (mean=0, sd=1)
 
-# Ilk 3 sutunun ismini BUYUK HARF yapmak istedim
-colnames(net_listem)[1:3] <- c("YAKIT_VERIMI", "SILINDIR", "BEYGIR_GUCU")
+# 5. SONUCLARIN OZETLENMESI
+# Gruplandirarak istatistik alma:
+summary_table <- df_preprocessed %>%
+  group_by(species, size_cat) %>%
+  summarise(
+    avg_length = mean(sepal.length),
+    count = n(),
+    .groups = 'drop'
+  )
 
-# Kontrol etmek istedim
-head(net_listem)
+print(summary_table)
 
-# Listemdeki araclarin Ortalama (Mean) yakit verimi degerlerini gormek istedim.
-mean(net_listem$YAKIT_VERIMI)
 
-# Listemdeki araclarin beygir gucune gore ceyrek degerlerini gormek istedim.
-quantile(net_listem$BEYGIR_GUCU)
 
-# Listemdeki araclarin median degerini gormek istedim. 
-median(net_listem$BEYGIR_GUCU)
+# Veri madenciliginde eksik veri tespiti ve ortalama ile doldurma temel bir fonksiyondur.
+# Sentetik bir veri seti uzerinde eksik veri olusturup doldurma islemi:
 
-# Gorsellestirme yapmak istiyorum, daha onceki derste R'ye yukledigim paketi aktiflestirmem gerekir.
-library(ggplot2)
-ggplot(net_listem, aes(x = BEYGIR_GUCU, y = YAKIT_VERIMI)) + 
-  geom_point(aes(color = SILINDIR)) + # Silindir hacimlerine gore renklendirdim
-  facet_wrap(~ SILINDIR)  
+set.seed(123) # Sonuclarin her seferinde ayni cikmasi icin 'seed' belirliyoruz
+df_with_nas <- df_clean %>%
+  mutate(sepal.length = ifelse(row_number() %in% sample(1:n(), 10), NA, sepal.length))
 
-# farkli sekilde de gorsellestirebiliriz
-boxplot(net_listem$BEYGIR_GUCU, 
-        main = "Beygir Gucu Dagilimi", 
-        ylab = "Beygir Gucu (HP)", 
-        col = "orange")
+# 1. Kac tane bos veri olustugunu gormek istiyorum
+print(paste("Eksik deger sayisi:", sum(is.na(df_with_nas$sepal.length))))
 
-# Elde ettigim net listenin ozet bilgilerini gormek istedim. 
-summary(net_listem)
-View(net_listem)
+# 2. Eksik Verileri Ortalama (Mean) ile Dolduralım
+# Veri madenciliginde buna 'Mean Imputation' denir.
+df_filled <- df_with_nas %>%
+  mutate(sepal.length = if_else(
+    is.na(sepal.length),               
+    mean(sepal.length, na.rm = TRUE),   
+  ))
 
-# Kesifsel Veri Analizi
-mean(net_listem$YAKIT_VERIMI) # yakit tuketim ortalamasi 12.62
-quantile(net_listem$BEYGIR_GUCU) # IQR 215 ile 245 arasindadir.
-median(net_listem$BEYGIR_GUCU)   # Sonuc: 230, 230 ile 245 beygir arasinda cok fazla benzer arac varken, 205 ile 230 arasinda araclar daha seyrek dagilmistir.
+# Kontrol edelim
+print(paste("Doldurma sonrasi eksik deger sayisi:", sum(is.na(df_filled$sepal.length))))
